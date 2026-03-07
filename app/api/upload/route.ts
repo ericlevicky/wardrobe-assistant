@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { uploadImageToDrive } from "@/lib/google-drive";
-import { analyzeClothingImage, GeminiRateLimitError } from "@/lib/gemini";
+import { analyzeClothingImage, GeminiRateLimitError, GeminiModelNotFoundError } from "@/lib/gemini";
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -42,6 +42,9 @@ export async function POST(request: NextRequest) {
     console.error("Upload error:", error);
     if (error instanceof GeminiRateLimitError) {
       return NextResponse.json({ error: error.message }, { status: 429 });
+    }
+    if (error instanceof GeminiModelNotFoundError) {
+      return NextResponse.json({ error: error.message }, { status: 502 });
     }
     const message = error instanceof Error ? error.message : "Upload failed";
     return NextResponse.json({ error: message }, { status: 500 });

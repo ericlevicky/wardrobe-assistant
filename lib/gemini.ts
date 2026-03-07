@@ -11,15 +11,31 @@ export class GeminiRateLimitError extends Error {
   }
 }
 
-function throwIfRateLimitError(error: unknown): never {
-  if (
-    error instanceof Error &&
-    (error.message.includes("429") ||
+export class GeminiModelNotFoundError extends Error {
+  constructor(
+    message = "Gemini model not found. Verify that your API key has access to the 'gemini-2.0-flash' model at https://aistudio.google.com/app/apikey."
+  ) {
+    super(message);
+    this.name = "GeminiModelNotFoundError";
+  }
+}
+
+function handleGeminiError(error: unknown): never {
+  if (error instanceof Error) {
+    if (
+      error.message.includes("429") ||
       error.message.includes("Too Many Requests") ||
       error.message.includes("RESOURCE_EXHAUSTED") ||
-      error.message.toLowerCase().includes("quota"))
-  ) {
-    throw new GeminiRateLimitError();
+      error.message.toLowerCase().includes("quota")
+    ) {
+      throw new GeminiRateLimitError();
+    }
+    if (
+      error.message.includes("404") ||
+      error.message.includes("NOT_FOUND")
+    ) {
+      throw new GeminiModelNotFoundError();
+    }
   }
   throw error;
 }
@@ -61,7 +77,7 @@ Respond ONLY in this exact JSON format:
   "description": "..."
 }`;
 
-  const result = await model.generateContent([prompt, imagePart]).catch(throwIfRateLimitError);
+  const result = await model.generateContent([prompt, imagePart]).catch(handleGeminiError);
   const text = result.response.text();
 
   // Extract JSON from response
@@ -114,7 +130,7 @@ Respond ONLY in this exact JSON format:
   }
 ]`;
 
-  const result = await model.generateContent(prompt).catch(throwIfRateLimitError);
+  const result = await model.generateContent(prompt).catch(handleGeminiError);
   const text = result.response.text();
 
   const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -172,6 +188,6 @@ Be encouraging, specific, and helpful. Format your response with clear sections.
 
   parts.push({ text: prompt });
 
-  const result = await model.generateContent(parts).catch(throwIfRateLimitError);
+  const result = await model.generateContent(parts).catch(handleGeminiError);
   return result.response.text();
 }

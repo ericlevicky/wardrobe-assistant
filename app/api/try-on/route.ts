@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { virtualTryOn, GeminiRateLimitError } from "@/lib/gemini";
+import { virtualTryOn, GeminiRateLimitError, GeminiModelNotFoundError } from "@/lib/gemini";
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -40,6 +40,9 @@ export async function POST(request: NextRequest) {
     console.error("Virtual try-on error:", error);
     if (error instanceof GeminiRateLimitError) {
       return NextResponse.json({ error: error.message }, { status: 429 });
+    }
+    if (error instanceof GeminiModelNotFoundError) {
+      return NextResponse.json({ error: error.message }, { status: 502 });
     }
     return NextResponse.json({ error: "Try-on failed" }, { status: 500 });
   }
