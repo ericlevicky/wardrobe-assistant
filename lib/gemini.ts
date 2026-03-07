@@ -14,7 +14,7 @@ export async function analyzeClothingImage(
   imageBase64: string,
   mimeType: string
 ): Promise<ClothingAnalysis> {
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
   const imagePart: Part = {
     inlineData: {
@@ -64,7 +64,7 @@ export async function getOutfitSuggestions(
   occasion?: string,
   weather?: string
 ): Promise<OutfitSuggestion[]> {
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
   const wardrobeDescription = wardrobeItems
     .map((item) => `- ${item.name} (${item.category}, ${item.color}, tags: ${item.tags})`)
@@ -109,7 +109,7 @@ export async function virtualTryOn(
   outfitItems: Array<{ name: string; color: string; category: string }>,
   clothingImages?: Array<{ base64: string; mimeType: string }>
 ): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
   const parts: Part[] = [];
 
