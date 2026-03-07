@@ -3,43 +3,25 @@ import { GoogleGenerativeAI, Part } from "@google/generative-ai";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export class GeminiRateLimitError extends Error {
-  constructor(message = "AI service is currently rate limited. Please try again in a few minutes.") {
+  constructor(
+    message = "Gemini API quota exceeded. Please check your usage and billing at https://aistudio.google.com or visit https://ai.dev/rate-limit to review your limits."
+  ) {
     super(message);
     this.name = "GeminiRateLimitError";
   }
 }
 
-function isRateLimitError(error: unknown): boolean {
-  if (error instanceof Error) {
-    return (
-      error.message.includes("429") ||
+function throwIfRateLimitError(error: unknown): never {
+  if (
+    error instanceof Error &&
+    (error.message.includes("429") ||
       error.message.includes("Too Many Requests") ||
       error.message.includes("RESOURCE_EXHAUSTED") ||
-      error.message.toLowerCase().includes("quota")
-    );
+      error.message.toLowerCase().includes("quota"))
+  ) {
+    throw new GeminiRateLimitError();
   }
-  return false;
-}
-
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, baseDelayMs = 1000): Promise<T> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error) {
-      if (!isRateLimitError(error)) {
-        throw error;
-      }
-
-      if (attempt === maxRetries) {
-        throw new GeminiRateLimitError();
-      }
-
-      const delay = baseDelayMs * Math.pow(2, attempt);
-      await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-  }
-
-  throw new GeminiRateLimitError();
+  throw error;
 }
 
 export interface ClothingAnalysis {
@@ -79,7 +61,7 @@ Respond ONLY in this exact JSON format:
   "description": "..."
 }`;
 
-  const result = await withRetry(() => model.generateContent([prompt, imagePart]));
+  const result = await model.generateContent([prompt, imagePart]).catch(throwIfRateLimitError);
   const text = result.response.text();
 
   // Extract JSON from response
@@ -132,7 +114,7 @@ Respond ONLY in this exact JSON format:
   }
 ]`;
 
-  const result = await withRetry(() => model.generateContent(prompt));
+  const result = await model.generateContent(prompt).catch(throwIfRateLimitError);
   const text = result.response.text();
 
   const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -190,6 +172,6 @@ Be encouraging, specific, and helpful. Format your response with clear sections.
 
   parts.push({ text: prompt });
 
-  const result = await withRetry(() => model.generateContent(parts));
+  const result = await model.generateContent(parts).catch(throwIfRateLimitError);
   return result.response.text();
 }
