@@ -2,6 +2,44 @@ import { GoogleGenerativeAI, Part } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
+export class GeminiRateLimitError extends Error {
+  constructor(
+    message = "Gemini API quota exceeded. Please check your usage and billing at https://aistudio.google.com or visit https://ai.dev/rate-limit to review your limits."
+  ) {
+    super(message);
+    this.name = "GeminiRateLimitError";
+  }
+}
+
+export class GeminiModelNotFoundError extends Error {
+  constructor(
+    message = "Gemini model not found. Verify that your API key has access to the 'gemini-2.0-flash' model at https://aistudio.google.com/app/apikey."
+  ) {
+    super(message);
+    this.name = "GeminiModelNotFoundError";
+  }
+}
+
+function handleGeminiError(error: unknown): never {
+  if (error instanceof Error) {
+    if (
+      error.message.includes("429") ||
+      error.message.includes("Too Many Requests") ||
+      error.message.includes("RESOURCE_EXHAUSTED") ||
+      error.message.toLowerCase().includes("quota")
+    ) {
+      throw new GeminiRateLimitError();
+    }
+    if (
+      error.message.includes("404") ||
+      error.message.includes("NOT_FOUND")
+    ) {
+      throw new GeminiModelNotFoundError();
+    }
+  }
+  throw error;
+}
+
 export interface ClothingAnalysis {
   name: string;
   category: string;
@@ -39,7 +77,7 @@ Respond ONLY in this exact JSON format:
   "description": "..."
 }`;
 
-  const result = await model.generateContent([prompt, imagePart]);
+  const result = await model.generateContent([prompt, imagePart]).catch(handleGeminiError);
   const text = result.response.text();
 
   // Extract JSON from response
@@ -92,7 +130,7 @@ Respond ONLY in this exact JSON format:
   }
 ]`;
 
-  const result = await model.generateContent(prompt);
+  const result = await model.generateContent(prompt).catch(handleGeminiError);
   const text = result.response.text();
 
   const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -150,6 +188,6 @@ Be encouraging, specific, and helpful. Format your response with clear sections.
 
   parts.push({ text: prompt });
 
-  const result = await model.generateContent(parts);
+  const result = await model.generateContent(parts).catch(handleGeminiError);
   return result.response.text();
 }

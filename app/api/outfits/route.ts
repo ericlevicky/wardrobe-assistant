@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getWardrobeItems } from "@/lib/google-sheets";
-import { getOutfitSuggestions } from "@/lib/gemini";
+import { getOutfitSuggestions, GeminiRateLimitError, GeminiModelNotFoundError } from "@/lib/gemini";
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -31,6 +31,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(suggestions);
   } catch (error) {
     console.error("Error getting outfit suggestions:", error);
+    if (error instanceof GeminiRateLimitError) {
+      return NextResponse.json({ error: error.message }, { status: 429 });
+    }
+    if (error instanceof GeminiModelNotFoundError) {
+      return NextResponse.json({ error: error.message }, { status: 502 });
+    }
     return NextResponse.json(
       { error: "Failed to get outfit suggestions" },
       { status: 500 }
