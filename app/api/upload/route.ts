@@ -30,13 +30,21 @@ export async function POST(request: NextRequest) {
       mimeType
     );
 
-    // Analyze with Gemini AI
-    const analysis = await analyzeClothingImage(base64, mimeType);
+    // Analyze with Gemini AI only when explicitly requested
+    const analyze = formData.get("analyze");
+    if (analyze === "true") {
+      const analysis = await analyzeClothingImage(base64, mimeType);
+      return NextResponse.json({
+        fileId,
+        imageUrl: webViewLink,
+        analysis,
+      });
+    }
 
     return NextResponse.json({
       fileId,
       imageUrl: webViewLink,
-      analysis,
+      analysis: null,
     });
   } catch (error) {
     console.error("Upload error:", error);
