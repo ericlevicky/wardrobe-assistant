@@ -19,7 +19,7 @@ export async function DELETE(
 
   try {
     // Get item to find drive file id before deleting
-    const items = await getWardrobeItems(session.accessToken, spreadsheetId);
+    const items = await getWardrobeItems(spreadsheetId);
     const item = items.find((i) => i.id === id);
 
     if (!item) {
@@ -36,7 +36,7 @@ export async function DELETE(
       }
     }
 
-    await deleteWardrobeItem(session.accessToken, spreadsheetId, id);
+    await deleteWardrobeItem(spreadsheetId, id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting wardrobe item:", error);

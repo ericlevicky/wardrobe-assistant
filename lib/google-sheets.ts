@@ -11,9 +11,23 @@ export interface ClothingItem {
   addedAt: string;
 }
 
-function getSheetsClient(accessToken: string) {
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: accessToken });
+function getSheetsClient() {
+  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
+
+  if (!clientEmail || !privateKey) {
+    throw new Error(
+      "Missing required environment variables: GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY must be set"
+    );
+  }
+
+  const auth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: clientEmail,
+      private_key: privateKey.replace(/\\n/g, "\n"),
+    },
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+  });
   return google.sheets({ version: "v4", auth });
 }
 
@@ -53,10 +67,9 @@ async function ensureSheetExists(
 }
 
 export async function getWardrobeItems(
-  accessToken: string,
   spreadsheetId: string
 ): Promise<ClothingItem[]> {
-  const sheets = getSheetsClient(accessToken);
+  const sheets = getSheetsClient();
   await ensureSheetExists(sheets, spreadsheetId);
 
   const response = await sheets.spreadsheets.values.get({
@@ -78,11 +91,10 @@ export async function getWardrobeItems(
 }
 
 export async function addWardrobeItem(
-  accessToken: string,
   spreadsheetId: string,
   item: Omit<ClothingItem, "id" | "addedAt">
 ): Promise<ClothingItem> {
-  const sheets = getSheetsClient(accessToken);
+  const sheets = getSheetsClient();
   await ensureSheetExists(sheets, spreadsheetId);
 
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -102,11 +114,10 @@ export async function addWardrobeItem(
 }
 
 export async function deleteWardrobeItem(
-  accessToken: string,
   spreadsheetId: string,
   itemId: string
 ): Promise<void> {
-  const sheets = getSheetsClient(accessToken);
+  const sheets = getSheetsClient();
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,

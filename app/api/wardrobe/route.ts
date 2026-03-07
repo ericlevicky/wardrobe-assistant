@@ -12,7 +12,7 @@ export async function GET() {
   const spreadsheetId = process.env.GOOGLE_SHEETS_ID!;
 
   try {
-    const items = await getWardrobeItems(session.accessToken, spreadsheetId);
+    const items = await getWardrobeItems(spreadsheetId);
     return NextResponse.json(items);
   } catch (error) {
     console.error("Error fetching wardrobe:", error);
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const item = await addWardrobeItem(session.accessToken, spreadsheetId, body);
+    const item = await addWardrobeItem(spreadsheetId, body);
     return NextResponse.json(item, { status: 201 });
   } catch (error) {
     console.error("Error adding wardrobe item:", error);

@@ -15,10 +15,7 @@ export async function POST(request: NextRequest) {
   try {
     const { occasion, weather } = await request.json();
 
-    const wardrobeItems = await getWardrobeItems(
-      session.accessToken,
-      spreadsheetId
-    );
+    const wardrobeItems = await getWardrobeItems(spreadsheetId);
 
     if (wardrobeItems.length === 0) {
       return NextResponse.json(
