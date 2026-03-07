@@ -7,7 +7,7 @@ import { getWardrobeItems } from "@/lib/google-sheets";
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.accessToken) {
@@ -15,7 +15,7 @@ export async function DELETE(
   }
 
   const spreadsheetId = process.env.GOOGLE_SHEETS_ID!;
-  const { id } = params;
+  const { id } = await params;
 
   try {
     // Get item to find drive file id before deleting
