@@ -1,6 +1,7 @@
-import { GoogleGenerativeAI, Part } from "@google/generative-ai";
+import { GoogleGenAI, Part, ApiError } from "@google/genai";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+const MODEL_NAME = "gemini-2.5-flash";
 
 export class GeminiRateLimitError extends Error {
   constructor(
@@ -13,7 +14,7 @@ export class GeminiRateLimitError extends Error {
 
 export class GeminiModelNotFoundError extends Error {
   constructor(
-    message = "Gemini model not found. Verify that your API key has access to the 'gemini-2.0-flash' model at https://aistudio.google.com/app/apikey."
+    message = `Gemini model not found. Verify that your API key has access to the '${MODEL_NAME}' model at https://aistudio.google.com/app/apikey.`
   ) {
     super(message);
     this.name = "GeminiModelNotFoundError";
@@ -21,6 +22,14 @@ export class GeminiModelNotFoundError extends Error {
 }
 
 function handleGeminiError(error: unknown): never {
+  if (error instanceof ApiError) {
+    if (error.status === 429) {
+      throw new GeminiRateLimitError();
+    }
+    if (error.status === 404) {
+      throw new GeminiModelNotFoundError();
+    }
+  }
   if (error instanceof Error) {
     if (
       error.message.includes("429") ||
@@ -52,8 +61,6 @@ export async function analyzeClothingImage(
   imageBase64: string,
   mimeType: string
 ): Promise<ClothingAnalysis> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
   const imagePart: Part = {
     inlineData: {
       data: imageBase64,
@@ -77,8 +84,15 @@ Respond ONLY in this exact JSON format:
   "description": "..."
 }`;
 
-  const result = await model.generateContent([prompt, imagePart]).catch(handleGeminiError);
-  const text = result.response.text();
+  const response = await genAI.models.generateContent({
+    model: MODEL_NAME,
+    contents: [prompt, imagePart],
+  }).catch(handleGeminiError);
+
+  const text = response.text;
+  if (!text) {
+    throw new Error("Failed to get AI response");
+  }
 
   // Extract JSON from response
   const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -102,8 +116,6 @@ export async function getOutfitSuggestions(
   occasion?: string,
   weather?: string
 ): Promise<OutfitSuggestion[]> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
   const wardrobeDescription = wardrobeItems
     .map((item) => `- ${item.name} (${item.category}, ${item.color}, tags: ${item.tags})`)
     .join("\n");
@@ -130,8 +142,15 @@ Respond ONLY in this exact JSON format:
   }
 ]`;
 
-  const result = await model.generateContent(prompt).catch(handleGeminiError);
-  const text = result.response.text();
+  const response = await genAI.models.generateContent({
+    model: MODEL_NAME,
+    contents: prompt,
+  }).catch(handleGeminiError);
+
+  const text = response.text;
+  if (!text) {
+    throw new Error("Failed to get AI response");
+  }
 
   const jsonMatch = text.match(/\[[\s\S]*\]/);
   if (!jsonMatch) {
@@ -147,8 +166,6 @@ export async function virtualTryOn(
   outfitItems: Array<{ name: string; color: string; category: string }>,
   clothingImages?: Array<{ base64: string; mimeType: string }>
 ): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
   const parts: Part[] = [];
 
   const outfitDescription = outfitItems
@@ -188,6 +205,14 @@ Be encouraging, specific, and helpful. Format your response with clear sections.
 
   parts.push({ text: prompt });
 
-  const result = await model.generateContent(parts).catch(handleGeminiError);
-  return result.response.text();
+  const response = await genAI.models.generateContent({
+    model: MODEL_NAME,
+    contents: parts,
+  }).catch(handleGeminiError);
+
+  const text = response.text;
+  if (!text) {
+    throw new Error("Failed to get AI response");
+  }
+  return text;
 }

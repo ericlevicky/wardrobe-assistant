@@ -20,7 +20,7 @@ An AI-powered personal wardrobe assistant that helps you organize your clothes a
 | Auth | [NextAuth.js](https://next-auth.js.org/) + Google OAuth |
 | Database | Google Sheets API |
 | Storage | Google Drive API |
-| AI | [Google Gemini 1.5 Flash](https://ai.google.dev/) |
+| AI | [Google Gemini 2.5 Flash](https://ai.google.dev/) |
 | Hosting | [Vercel](https://vercel.com/) (free tier) |
 
 ## Prerequisites
