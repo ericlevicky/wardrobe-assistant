@@ -48,26 +48,30 @@ export default function AddClothingModal({ onClose, onSuccess }: AddClothingModa
     }
   };
 
+  const uploadImage = async (imageFile: File): Promise<{ imageUrl: string; fileId: string; analysis: { name: string; category: string; color: string; tags: string } }> => {
+    const data = new FormData();
+    data.append("image", imageFile);
+
+    const res = await fetch("/api/upload", {
+      method: "POST",
+      body: data,
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Upload failed");
+    }
+
+    return res.json();
+  };
+
   const handleAnalyze = async () => {
     if (!file) return;
     setAnalyzing(true);
     setError("");
 
     try {
-      const data = new FormData();
-      data.append("image", file);
-
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: data,
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Upload failed");
-      }
-
-      const result = await res.json();
+      const result = await uploadImage(file);
       setFormData({
         name: result.analysis.name || "",
         category: result.analysis.category || "Tops",
@@ -89,10 +93,23 @@ export default function AddClothingModal({ onClose, onSuccess }: AddClothingModa
     setError("");
 
     try {
+      let formDataToSubmit = formData;
+
+      // If there's a file selected but the image hasn't been uploaded yet, upload it now
+      if (file && !formData.imageUrl) {
+        const result = await uploadImage(file);
+        formDataToSubmit = {
+          ...formData,
+          imageUrl: result.imageUrl || "",
+          driveFileId: result.fileId || "",
+        };
+        setFormData(formDataToSubmit);
+      }
+
       const res = await fetch("/api/wardrobe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(formDataToSubmit),
       });
 
       if (!res.ok) {
