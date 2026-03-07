@@ -5,9 +5,67 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Navigation from "@/components/Navigation";
 import { OutfitSuggestion } from "@/lib/gemini";
+import { ClothingItem } from "@/lib/google-sheets";
 
 const OCCASIONS = ["Casual", "Work/Office", "Date Night", "Party", "Gym/Workout", "Outdoor", "Formal"];
 const WEATHER = ["Spring", "Summer", "Fall", "Winter", "Rainy", "Hot & Sunny", "Cold"];
+
+const CATEGORY_EMOJI: Record<string, string> = {
+  Tops: "👕",
+  Bottoms: "👖",
+  Dresses: "👗",
+  Outerwear: "🧥",
+  Footwear: "👟",
+  Accessories: "👜",
+  Other: "🎽",
+};
+
+const RANDOM_INCLUDE_CHANCE = 0.5;
+
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function buildShuffledOutfit(items: ClothingItem[]): ClothingItem[] {
+  const byCategory = (cat: string) => items.filter((i) => i.category === cat);
+
+  const tops = byCategory("Tops");
+  const bottoms = byCategory("Bottoms");
+  const dresses = byCategory("Dresses");
+  const outerwear = byCategory("Outerwear");
+  const footwear = byCategory("Footwear");
+  const accessories = byCategory("Accessories");
+
+  const outfit: ClothingItem[] = [];
+
+  // Core: dress OR top + bottom
+  const canUseDress = dresses.length > 0;
+  const canUseTopBottom = tops.length > 0 || bottoms.length > 0;
+
+  if (canUseDress && (!canUseTopBottom || Math.random() > RANDOM_INCLUDE_CHANCE)) {
+    outfit.push(pickRandom(dresses));
+  } else {
+    if (tops.length > 0) outfit.push(pickRandom(tops));
+    if (bottoms.length > 0) outfit.push(pickRandom(bottoms));
+  }
+
+  // Optional outerwear (50% chance if available)
+  if (outerwear.length > 0 && Math.random() > RANDOM_INCLUDE_CHANCE) {
+    outfit.push(pickRandom(outerwear));
+  }
+
+  // Footwear
+  if (footwear.length > 0) {
+    outfit.push(pickRandom(footwear));
+  }
+
+  // Accessories (50% chance, one item)
+  if (accessories.length > 0 && Math.random() > RANDOM_INCLUDE_CHANCE) {
+    outfit.push(pickRandom(accessories));
+  }
+
+  return outfit;
+}
 
 export default function OutfitsPage() {
   const { data: session, status } = useSession();
@@ -18,6 +76,12 @@ export default function OutfitsPage() {
   const [occasion, setOccasion] = useState("");
   const [weather, setWeather] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
+
+  // Shuffle state
+  const [shuffledOutfit, setShuffledOutfit] = useState<ClothingItem[]>([]);
+  const [shuffleLoading, setShuffleLoading] = useState(false);
+  const [shuffleError, setShuffleError] = useState("");
+  const [hasShuffled, setHasShuffled] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -51,6 +115,40 @@ export default function OutfitsPage() {
     }
   };
 
+  const shuffleOutfit = async () => {
+    setShuffleLoading(true);
+    setShuffleError("");
+    setHasShuffled(true);
+
+    try {
+      const res = await fetch("/api/wardrobe");
+      if (!res.ok) {
+        throw new Error("Failed to fetch wardrobe");
+      }
+      const items: ClothingItem[] = await res.json();
+
+      if (items.length === 0) {
+        setShuffleError("No wardrobe items found. Add some clothes first!");
+        setShuffledOutfit([]);
+        return;
+      }
+
+      const outfit = buildShuffledOutfit(items);
+
+      if (outfit.length === 0) {
+        setShuffleError("Not enough items to build an outfit. Add more clothes!");
+        setShuffledOutfit([]);
+        return;
+      }
+
+      setShuffledOutfit(outfit);
+    } catch (err) {
+      setShuffleError(err instanceof Error ? err.message : "Failed to shuffle outfit");
+    } finally {
+      setShuffleLoading(false);
+    }
+  };
+
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -65,15 +163,76 @@ export default function OutfitsPage() {
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">✨ Outfit Ideas</h1>
+          <h1 className="text-3xl font-bold text-gray-900">👗 Outfit Ideas</h1>
           <p className="text-gray-600 mt-1">
-            Let Gemini AI suggest perfect outfits from your wardrobe
+            Shuffle a random outfit or let Gemini AI suggest styled looks from your wardrobe
           </p>
         </div>
 
-        {/* Filters Card */}
+        {/* Shuffle Card */}
         <div className="card mb-8">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">What are you dressing for?</h2>
+          <div className="flex items-center gap-3 mb-2">
+            <span className="text-2xl">🔀</span>
+            <h2 className="text-lg font-semibold text-gray-800">Shuffle an Outfit</h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            Randomly pick items from your wardrobe to put together a look — no AI needed.
+          </p>
+          <button
+            onClick={shuffleOutfit}
+            disabled={shuffleLoading}
+            className="btn-secondary flex items-center gap-2"
+          >
+            {shuffleLoading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                Shuffling...
+              </>
+            ) : (
+              <>🔀 {hasShuffled ? "Shuffle Again" : "Shuffle Outfit"}</>
+            )}
+          </button>
+
+          {shuffleError && (
+            <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              {shuffleError}
+              {shuffleError.includes("No wardrobe") && (
+                <button
+                  onClick={() => router.push("/wardrobe")}
+                  className="ml-2 underline"
+                >
+                  Add clothes →
+                </button>
+              )}
+            </div>
+          )}
+
+          {shuffledOutfit.length > 0 && (
+            <div className="mt-4 border border-gray-200 rounded-xl p-4 bg-gray-50">
+              <p className="text-sm font-medium text-gray-700 mb-3">Your shuffled outfit:</p>
+              <div className="space-y-2">
+                {shuffledOutfit.map((item) => (
+                  <div key={item.id} className="flex items-center gap-3">
+                    <span className="text-lg">{CATEGORY_EMOJI[item.category] ?? CATEGORY_EMOJI["Other"]}</span>
+                    <div>
+                      <span className="text-sm font-medium text-gray-800">{item.name}</span>
+                      <span className="ml-2 text-xs text-gray-500">
+                        {item.category} · {item.color}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* AI Suggestions Card */}
+        <div className="card mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-2xl">✨</span>
+            <h2 className="text-lg font-semibold text-gray-800">AI Outfit Suggestions</h2>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -128,7 +287,7 @@ export default function OutfitsPage() {
                 Generating ideas...
               </>
             ) : (
-              <>✨ Get Outfit Suggestions</>
+              <>✨ Get AI Outfit Suggestions</>
             )}
           </button>
         </div>
@@ -147,11 +306,11 @@ export default function OutfitsPage() {
           </div>
         )}
 
-        {/* Suggestions */}
+        {/* AI Suggestions */}
         {suggestions.length > 0 && (
           <div className="space-y-6">
             <h2 className="text-xl font-semibold text-gray-800">
-              Here are your outfit ideas:
+              Here are your AI outfit ideas:
             </h2>
             {suggestions.map((suggestion, idx) => (
               <div key={idx} className="card">
@@ -205,10 +364,10 @@ export default function OutfitsPage() {
           </div>
         )}
 
-        {!hasSearched && (
+        {!hasSearched && !hasShuffled && (
           <div className="text-center py-16 text-gray-500">
-            <div className="text-5xl mb-3">✨</div>
-            <p className="text-lg">Click &quot;Get Outfit Suggestions&quot; to let AI style you!</p>
+            <div className="text-5xl mb-3">👗</div>
+            <p className="text-lg">Shuffle a random outfit or ask AI to style you!</p>
           </div>
         )}
       </main>

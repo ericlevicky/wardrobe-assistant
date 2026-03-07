@@ -48,9 +48,15 @@ export default function AddClothingModal({ onClose, onSuccess }: AddClothingModa
     }
   };
 
-  const uploadImage = async (imageFile: File): Promise<{ imageUrl: string; fileId: string; analysis: { name: string; category: string; color: string; tags: string } }> => {
+  const uploadImage = async (
+    imageFile: File,
+    analyze = false
+  ): Promise<{ imageUrl: string; fileId: string; analysis: { name: string; category: string; color: string; tags: string } | null }> => {
     const data = new FormData();
     data.append("image", imageFile);
+    if (analyze) {
+      data.append("analyze", "true");
+    }
 
     const res = await fetch("/api/upload", {
       method: "POST",
@@ -71,12 +77,12 @@ export default function AddClothingModal({ onClose, onSuccess }: AddClothingModa
     setError("");
 
     try {
-      const result = await uploadImage(file);
+      const result = await uploadImage(file, true);
       setFormData({
-        name: result.analysis.name || "",
-        category: result.analysis.category || "Tops",
-        color: result.analysis.color || "",
-        tags: result.analysis.tags || "",
+        name: result.analysis?.name || "",
+        category: result.analysis?.category || "Tops",
+        color: result.analysis?.color || "",
+        tags: result.analysis?.tags || "",
         imageUrl: result.imageUrl || "",
         driveFileId: result.fileId || "",
       });
@@ -95,9 +101,10 @@ export default function AddClothingModal({ onClose, onSuccess }: AddClothingModa
     try {
       let formDataToSubmit = formData;
 
-      // If there's a file selected but the image hasn't been uploaded yet, upload it now
+      // If there's a file selected but the image hasn't been uploaded yet, upload
+      // without AI analysis so Gemini is not required to add clothing
       if (file && !formData.imageUrl) {
-        const result = await uploadImage(file);
+        const result = await uploadImage(file, false);
         formDataToSubmit = {
           ...formData,
           imageUrl: result.imageUrl || "",
@@ -184,28 +191,33 @@ export default function AddClothingModal({ onClose, onSuccess }: AddClothingModa
             />
           </div>
 
-          {/* Analyze Button */}
+          {/* Analyze Button (optional) */}
           {file && !formData.imageUrl && (
-            <button
-              type="button"
-              onClick={handleAnalyze}
-              disabled={analyzing}
-              className="btn-primary w-full flex items-center justify-center gap-2"
-            >
-              {analyzing ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  Analyzing with AI...
-                </>
-              ) : (
-                <>✨ Analyze with Gemini AI</>
-              )}
-            </button>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={handleAnalyze}
+                disabled={analyzing}
+                className="btn-primary w-full flex items-center justify-center gap-2"
+              >
+                {analyzing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Analyzing with AI...
+                  </>
+                ) : (
+                  <>✨ Analyze with Gemini AI (optional)</>
+                )}
+              </button>
+              <p className="text-xs text-gray-500 text-center">
+                Or fill in the details below and save directly
+              </p>
+            </div>
           )}
 
           {formData.imageUrl && (
             <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-sm text-green-700 flex items-center gap-2">
-              ✓ Image uploaded & analyzed
+              ✓ Image uploaded{formData.name ? " & analyzed" : ""}
             </div>
           )}
 
