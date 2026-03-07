@@ -85,11 +85,6 @@ export default function AddClothingModal({ onClose, onSuccess }: AddClothingModa
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.imageUrl) {
-      setError("Please upload and analyze an image first.");
-      return;
-    }
-
     setLoading(true);
     setError("");
 
@@ -264,7 +259,7 @@ export default function AddClothingModal({ onClose, onSuccess }: AddClothingModa
               </button>
               <button
                 type="submit"
-                disabled={loading || !formData.imageUrl}
+                disabled={loading || !formData.name.trim() || !formData.color.trim()}
                 className="btn-primary flex-1 flex items-center justify-center gap-2"
               >
                 {loading ? (
