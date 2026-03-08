@@ -53,7 +53,7 @@ export async function uploadImageToDrive(
 
   return {
     fileId,
-    webViewLink: `https://drive.google.com/uc?export=view&id=${fileId}`,
+    webViewLink: `https://lh3.googleusercontent.com/d/${fileId}`,
   };
 }
 
