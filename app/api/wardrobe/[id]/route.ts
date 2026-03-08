@@ -10,7 +10,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
-  if (!session?.accessToken) {
+  if (!session?.accessToken || !session.userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -19,7 +19,7 @@ export async function DELETE(
 
   try {
     // Get item to find drive file id before deleting
-    const items = await getWardrobeItems(session.accessToken, spreadsheetId);
+    const items = await getWardrobeItems(spreadsheetId, session.userId);
     const item = items.find((i) => i.id === id);
 
     if (!item) {
@@ -36,7 +36,7 @@ export async function DELETE(
       }
     }
 
-    await deleteWardrobeItem(session.accessToken, spreadsheetId, id);
+    await deleteWardrobeItem(spreadsheetId, session.userId, id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting wardrobe item:", error);

@@ -5,14 +5,14 @@ import { getWardrobeItems, addWardrobeItem } from "@/lib/google-sheets";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!session?.accessToken) {
+  if (!session?.accessToken || !session.userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const spreadsheetId = process.env.GOOGLE_SHEETS_ID!;
 
   try {
-    const items = await getWardrobeItems(session.accessToken, spreadsheetId);
+    const items = await getWardrobeItems(spreadsheetId, session.userId);
     return NextResponse.json(items);
   } catch (error) {
     console.error("Error fetching wardrobe:", error);
@@ -22,7 +22,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.accessToken) {
+  if (!session?.accessToken || !session.userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const item = await addWardrobeItem(session.accessToken, spreadsheetId, body);
+    const item = await addWardrobeItem(spreadsheetId, session.userId, body);
     return NextResponse.json(item, { status: 201 });
   } catch (error) {
     console.error("Error adding wardrobe item:", error);
