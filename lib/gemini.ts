@@ -6,7 +6,7 @@ const IMAGE_GEN_MODEL = "gemini-2.0-flash-preview-image-generation";
 
 export class GeminiRateLimitError extends Error {
   constructor(
-    message = "Gemini API quota exceeded. Please check your usage and billing at https://aistudio.google.com or visit https://ai.dev/rate-limit to review your limits."
+    message = "Gemini API rate limit reached. You may have hit the per-minute request limit—please wait a moment and try again. If this issue persists, check your usage and billing at https://aistudio.google.com or visit https://ai.dev/rate-limit to review your limits."
   ) {
     super(message);
     this.name = "GeminiRateLimitError";
