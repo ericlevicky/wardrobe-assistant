@@ -6,12 +6,12 @@ export default function CoffeeSupportNotice({ className = "" }: { className?: st
       🖼️ Image generation is currently unavailable — this feature requires a paid API. If
       you&apos;d like to{" "}
       <a
-        href="https://buymeacoffee.com/ericlevicky"
+        href="https://venmo.com/Eric-Levicky"
         target="_blank"
         rel="noopener noreferrer"
         className="underline font-medium hover:text-amber-900"
       >
-        buy me a coffee ☕
+        send me a tip on Venmo 💸
       </a>
       , I&apos;ll consider enabling it!
     </div>
