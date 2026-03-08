@@ -10,7 +10,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
-  if (!session?.accessToken || !session.userId) {
+  if (!session?.userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -29,7 +29,7 @@ export async function DELETE(
     // Delete from Drive if there's an associated file
     if (item.driveFileId) {
       try {
-        await deleteImageFromDrive(session.accessToken, item.driveFileId);
+        await deleteImageFromDrive(item.driveFileId);
       } catch (driveError) {
         console.error("Failed to delete Drive file:", driveError);
         // Continue with sheet deletion even if drive deletion fails
