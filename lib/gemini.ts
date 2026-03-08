@@ -2,7 +2,7 @@ import { GoogleGenAI, Modality, Part, ApiError } from "@google/genai";
 
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 const MODEL_NAME = "gemini-2.5-flash";
-const IMAGE_GEN_MODEL = "gemini-2.0-flash-preview-image-generation";
+const IMAGE_GEN_MODEL = "gemini-2.0-flash-exp";
 
 export class GeminiRateLimitError extends Error {
   constructor(
@@ -14,21 +14,21 @@ export class GeminiRateLimitError extends Error {
 }
 
 export class GeminiModelNotFoundError extends Error {
-  constructor(
-    message = `Gemini model not found. Verify that your API key has access to the '${MODEL_NAME}' model at https://aistudio.google.com/app/apikey.`
-  ) {
-    super(message);
+  constructor(modelName: string = MODEL_NAME) {
+    super(
+      `Gemini model not found. Verify that your API key has access to the '${modelName}' model at https://aistudio.google.com/app/apikey.`
+    );
     this.name = "GeminiModelNotFoundError";
   }
 }
 
-function handleGeminiError(error: unknown): never {
+function handleGeminiError(error: unknown, modelName: string = MODEL_NAME): never {
   if (error instanceof ApiError) {
     if (error.status === 429) {
       throw new GeminiRateLimitError();
     }
     if (error.status === 404) {
-      throw new GeminiModelNotFoundError();
+      throw new GeminiModelNotFoundError(modelName);
     }
   }
   if (error instanceof Error) {
@@ -44,7 +44,7 @@ function handleGeminiError(error: unknown): never {
       error.message.includes("404") ||
       error.message.includes("NOT_FOUND")
     ) {
-      throw new GeminiModelNotFoundError();
+      throw new GeminiModelNotFoundError(modelName);
     }
   }
   throw error;
@@ -88,7 +88,7 @@ Respond ONLY in this exact JSON format:
   const response = await genAI.models.generateContent({
     model: MODEL_NAME,
     contents: [prompt, imagePart],
-  }).catch(handleGeminiError);
+  }).catch((e) => handleGeminiError(e, MODEL_NAME));
 
   const text = response.text;
   if (!text) {
@@ -146,7 +146,7 @@ Respond ONLY in this exact JSON format:
   const response = await genAI.models.generateContent({
     model: MODEL_NAME,
     contents: prompt,
-  }).catch(handleGeminiError);
+  }).catch((e) => handleGeminiError(e, MODEL_NAME));
 
   const text = response.text;
   if (!text) {
@@ -209,7 +209,7 @@ Be encouraging, specific, and helpful. Format your response with clear sections.
   const response = await genAI.models.generateContent({
     model: MODEL_NAME,
     contents: parts,
-  }).catch(handleGeminiError);
+  }).catch((e) => handleGeminiError(e, MODEL_NAME));
 
   const text = response.text;
   if (!text) {
@@ -268,7 +268,7 @@ export async function generateOutfitImage(
         responseModalities: [Modality.IMAGE, Modality.TEXT],
       },
     })
-    .catch(handleGeminiError);
+    .catch((e) => handleGeminiError(e, IMAGE_GEN_MODEL));
 
   const candidates = response.candidates;
   if (!candidates || candidates.length === 0) {
