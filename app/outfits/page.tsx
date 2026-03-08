@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import Navigation from "@/components/Navigation";
+import CoffeeSupportNotice from "@/components/CoffeeSupportNotice";
 import { OutfitSuggestion } from "@/lib/gemini";
 import { ClothingItem } from "@/lib/google-sheets";
 
@@ -355,7 +356,7 @@ export default function OutfitsPage() {
                   )}
                 </button>
                 {imageErrors["shuffle"] && (
-                  <p className="mt-2 text-sm text-red-600">{imageErrors["shuffle"]}</p>
+                  <CoffeeSupportNotice className="mt-2" />
                 )}
                 {outfitImages["shuffle"] && (
                   <div className="mt-3">
@@ -539,7 +540,7 @@ export default function OutfitsPage() {
                     )}
                   </button>
                   {imageErrors[key] && (
-                    <p className="mt-2 text-sm text-red-600">{imageErrors[key]}</p>
+                    <CoffeeSupportNotice className="mt-2" />
                   )}
                   {outfitImages[key] && (
                     <div className="mt-3">

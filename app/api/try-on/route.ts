@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
         generatedImage.status === "fulfilled"
           ? generatedImage.value.mimeType
           : null,
+      imageGenerationFailed: generatedImage.status === "rejected",
     });
   } catch (error) {
     console.error("Virtual try-on error:", error);
