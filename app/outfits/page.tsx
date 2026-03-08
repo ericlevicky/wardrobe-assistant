@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Navigation from "@/components/Navigation";
 import { OutfitSuggestion } from "@/lib/gemini";
 import { ClothingItem } from "@/lib/google-sheets";
@@ -67,9 +67,43 @@ function buildShuffledOutfit(items: ClothingItem[]): ClothingItem[] {
   return outfit;
 }
 
+/** Match AI suggestion item names to actual wardrobe items (case-insensitive, partial). */
+function matchItems(names: string[], wardrobe: ClothingItem[]): ClothingItem[] {
+  return names.flatMap((name) => {
+    const lower = name.toLowerCase();
+    const match = wardrobe.find(
+      (item) =>
+        item.name.toLowerCase() === lower ||
+        item.name.toLowerCase().includes(lower) ||
+        lower.includes(item.name.toLowerCase())
+    );
+    return match ? [match] : [];
+  });
+}
+
+/** Small clothing image thumbnail. */
+function ItemThumbnail({ item }: { item: ClothingItem }) {
+  if (item.imageUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={item.imageUrl}
+        alt={item.name}
+        className="w-16 h-16 object-cover rounded-lg border border-gray-200 flex-shrink-0"
+      />
+    );
+  }
+  return (
+    <div className="w-16 h-16 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center flex-shrink-0 text-2xl">
+      {CATEGORY_EMOJI[item.category] ?? CATEGORY_EMOJI["Other"]}
+    </div>
+  );
+}
+
 export default function OutfitsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const [wardrobe, setWardrobe] = useState<ClothingItem[]>([]);
   const [suggestions, setSuggestions] = useState<OutfitSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -83,16 +117,43 @@ export default function OutfitsPage() {
   const [shuffleError, setShuffleError] = useState("");
   const [hasShuffled, setHasShuffled] = useState(false);
 
+  // Outfit image generation state — keyed by index ("shuffle" or suggestion index)
+  const [generatingImage, setGeneratingImage] = useState<string | null>(null);
+  const [outfitImages, setOutfitImages] = useState<Record<string, string>>({});
+  const [outfitImageMimes, setOutfitImageMimes] = useState<Record<string, string>>({});
+  const [imageErrors, setImageErrors] = useState<Record<string, string>>({});
+
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/");
     }
   }, [status, router]);
 
+  const fetchWardrobe = useCallback(async () => {
+    try {
+      const res = await fetch("/api/wardrobe");
+      if (!res.ok) throw new Error("Failed to fetch wardrobe");
+      const items: ClothingItem[] = await res.json();
+      setWardrobe(items);
+      return items;
+    } catch {
+      return [];
+    }
+  }, []);
+
+  useEffect(() => {
+    if (session) {
+      fetchWardrobe();
+    }
+  }, [session, fetchWardrobe]);
+
   const getSuggestions = async () => {
     setLoading(true);
     setError("");
     setHasSearched(true);
+    setOutfitImages({});
+    setOutfitImageMimes({});
+    setImageErrors({});
 
     try {
       const res = await fetch("/api/outfits", {
@@ -115,17 +176,20 @@ export default function OutfitsPage() {
     }
   };
 
+  const clearOutfitImageForKey = (key: string) => {
+    setOutfitImages((prev) => { const next = { ...prev }; delete next[key]; return next; });
+    setOutfitImageMimes((prev) => { const next = { ...prev }; delete next[key]; return next; });
+    setImageErrors((prev) => { const next = { ...prev }; delete next[key]; return next; });
+  };
+
   const shuffleOutfit = async () => {
     setShuffleLoading(true);
     setShuffleError("");
     setHasShuffled(true);
+    clearOutfitImageForKey("shuffle");
 
     try {
-      const res = await fetch("/api/wardrobe");
-      if (!res.ok) {
-        throw new Error("Failed to fetch wardrobe");
-      }
-      const items: ClothingItem[] = await res.json();
+      const items = wardrobe.length > 0 ? wardrobe : await fetchWardrobe();
 
       if (items.length === 0) {
         setShuffleError("No wardrobe items found. Add some clothes first!");
@@ -146,6 +210,56 @@ export default function OutfitsPage() {
       setShuffleError(err instanceof Error ? err.message : "Failed to shuffle outfit");
     } finally {
       setShuffleLoading(false);
+    }
+  };
+
+  const generateImage = async (
+    key: string,
+    items: ClothingItem[],
+    extraItems?: string[]
+  ) => {
+    setGeneratingImage(key);
+    clearOutfitImageForKey(key);
+
+    try {
+      // Build outfit items descriptor — use matched ClothingItems + any unmatched text items
+      const outfitItems = items.map((i) => ({
+        name: i.name,
+        color: i.color,
+        category: i.category,
+      }));
+      if (extraItems && extraItems.length > 0) {
+        for (const name of extraItems) {
+          if (!items.find((i) => i.name.toLowerCase() === name.toLowerCase())) {
+            outfitItems.push({ name, color: "", category: "" });
+          }
+        }
+      }
+      const clothingImageUrls = items
+        .map((i) => i.imageUrl)
+        .filter(Boolean);
+
+      const res = await fetch("/api/outfit-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outfitItems, clothingImageUrls }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Image generation failed");
+      }
+
+      const data = await res.json();
+      setOutfitImages((prev) => ({ ...prev, [key]: data.imageData }));
+      setOutfitImageMimes((prev) => ({ ...prev, [key]: data.mimeType || "image/png" }));
+    } catch (err) {
+      setImageErrors((prev) => ({
+        ...prev,
+        [key]: err instanceof Error ? err.message : "Failed to generate image",
+      }));
+    } finally {
+      setGeneratingImage(null);
     }
   };
 
@@ -210,10 +324,10 @@ export default function OutfitsPage() {
           {shuffledOutfit.length > 0 && (
             <div className="mt-4 border border-gray-200 rounded-xl p-4 bg-gray-50">
               <p className="text-sm font-medium text-gray-700 mb-3">Your shuffled outfit:</p>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {shuffledOutfit.map((item) => (
                   <div key={item.id} className="flex items-center gap-3">
-                    <span className="text-lg">{CATEGORY_EMOJI[item.category] ?? CATEGORY_EMOJI["Other"]}</span>
+                    <ItemThumbnail item={item} />
                     <div>
                       <span className="text-sm font-medium text-gray-800">{item.name}</span>
                       <span className="ml-2 text-xs text-gray-500">
@@ -222,6 +336,40 @@ export default function OutfitsPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Generate Outfit Image button */}
+              <div className="mt-4">
+                <button
+                  onClick={() => generateImage("shuffle", shuffledOutfit)}
+                  disabled={generatingImage === "shuffle"}
+                  className="btn-secondary text-sm flex items-center gap-2"
+                >
+                  {generatingImage === "shuffle" ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                      Generating image...
+                    </>
+                  ) : (
+                    <>🖼️ Generate Outfit Image</>
+                  )}
+                </button>
+                {imageErrors["shuffle"] && (
+                  <p className="mt-2 text-sm text-red-600">{imageErrors["shuffle"]}</p>
+                )}
+                {outfitImages["shuffle"] && (
+                  <div className="mt-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`data:${outfitImageMimes["shuffle"] || "image/png"};base64,${outfitImages["shuffle"]}`}
+                      alt="Generated outfit image"
+                      className="w-full max-h-80 object-contain rounded-xl border border-gray-200"
+                    />
+                    <p className="text-xs text-gray-400 mt-1 text-center">
+                      AI-generated image — results may vary
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -312,48 +460,103 @@ export default function OutfitsPage() {
             <h2 className="text-xl font-semibold text-gray-800">
               Here are your AI outfit ideas:
             </h2>
-            {suggestions.map((suggestion, idx) => (
-              <div key={idx} className="card">
-                <div className="flex items-start justify-between gap-4 mb-4">
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">{suggestion.title}</h3>
-                    <span className="inline-block mt-1 px-3 py-0.5 bg-primary-100 text-primary-700 text-sm rounded-full">
-                      {suggestion.occasion}
+            {suggestions.map((suggestion, idx) => {
+              const key = `suggestion-${idx}`;
+              const matchedItems = matchItems(suggestion.items, wardrobe);
+              return (
+                <div key={idx} className="card">
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">{suggestion.title}</h3>
+                      <span className="inline-block mt-1 px-3 py-0.5 bg-primary-100 text-primary-700 text-sm rounded-full">
+                        {suggestion.occasion}
+                      </span>
+                    </div>
+                    <span className="text-3xl">
+                      {idx === 0 ? "👑" : idx === 1 ? "⭐" : "💫"}
                     </span>
                   </div>
-                  <span className="text-3xl">
-                    {idx === 0 ? "👑" : idx === 1 ? "⭐" : "💫"}
-                  </span>
-                </div>
 
-                {/* Items */}
-                <div className="mb-4">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Outfit pieces:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {suggestion.items.map((item, i) => (
-                      <span
-                        key={i}
-                        className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm"
-                      >
-                        👕 {item}
-                      </span>
-                    ))}
+                  {/* Items with thumbnails */}
+                  <div className="mb-4">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Outfit pieces:</p>
+                    <div className="space-y-2">
+                      {suggestion.items.map((itemName, i) => {
+                        const wardrobeItem = wardrobe.find(
+                          (w) =>
+                            w.name.toLowerCase() === itemName.toLowerCase() ||
+                            w.name.toLowerCase().includes(itemName.toLowerCase()) ||
+                            itemName.toLowerCase().includes(w.name.toLowerCase())
+                        );
+                        return (
+                          <div key={i} className="flex items-center gap-3">
+                            {wardrobeItem ? (
+                              <ItemThumbnail item={wardrobeItem} />
+                            ) : (
+                              <div className="w-16 h-16 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center flex-shrink-0 text-xl">
+                                👕
+                              </div>
+                            )}
+                            <div>
+                              <span className="text-sm font-medium text-gray-800">{itemName}</span>
+                              {wardrobeItem && (
+                                <span className="ml-2 text-xs text-gray-500">
+                                  {wardrobeItem.category} · {wardrobeItem.color}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
 
-                {/* Description */}
-                <div className="mb-3">
-                  <p className="text-sm font-medium text-gray-700 mb-1">Why it works:</p>
-                  <p className="text-sm text-gray-600">{suggestion.description}</p>
-                </div>
+                  {/* Description */}
+                  <div className="mb-3">
+                    <p className="text-sm font-medium text-gray-700 mb-1">Why it works:</p>
+                    <p className="text-sm text-gray-600">{suggestion.description}</p>
+                  </div>
 
-                {/* Styling Tips */}
-                <div className="bg-primary-50 rounded-lg p-3">
-                  <p className="text-sm font-medium text-primary-800 mb-1">💡 Styling tips:</p>
-                  <p className="text-sm text-primary-700">{suggestion.stylingTips}</p>
+                  {/* Styling Tips */}
+                  <div className="bg-primary-50 rounded-lg p-3 mb-4">
+                    <p className="text-sm font-medium text-primary-800 mb-1">💡 Styling tips:</p>
+                    <p className="text-sm text-primary-700">{suggestion.stylingTips}</p>
+                  </div>
+
+                  {/* Generate Outfit Image */}
+                  <button
+                    onClick={() => generateImage(key, matchedItems, suggestion.items)}
+                    disabled={generatingImage === key}
+                    className="btn-secondary text-sm flex items-center gap-2"
+                  >
+                    {generatingImage === key ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                        Generating image...
+                      </>
+                    ) : (
+                      <>🖼️ Generate Outfit Image</>
+                    )}
+                  </button>
+                  {imageErrors[key] && (
+                    <p className="mt-2 text-sm text-red-600">{imageErrors[key]}</p>
+                  )}
+                  {outfitImages[key] && (
+                    <div className="mt-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`data:${outfitImageMimes[key] || "image/png"};base64,${outfitImages[key]}`}
+                        alt="Generated outfit image"
+                        className="w-full max-h-80 object-contain rounded-xl border border-gray-200"
+                      />
+                      <p className="text-xs text-gray-400 mt-1 text-center">
+                        AI-generated image — results may vary
+                      </p>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

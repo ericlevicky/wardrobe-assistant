@@ -1,7 +1,8 @@
-import { GoogleGenAI, Part, ApiError } from "@google/genai";
+import { GoogleGenAI, Modality, Part, ApiError } from "@google/genai";
 
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 const MODEL_NAME = "gemini-2.5-flash";
+const IMAGE_GEN_MODEL = "gemini-2.0-flash-preview-image-generation";
 
 export class GeminiRateLimitError extends Error {
   constructor(
@@ -215,4 +216,78 @@ Be encouraging, specific, and helpful. Format your response with clear sections.
     throw new Error("Failed to get AI response");
   }
   return text;
+}
+
+export interface GeneratedImageResult {
+  imageData: string;
+  mimeType: string;
+}
+
+export async function generateOutfitImage(
+  outfitItems: Array<{ name: string; color: string; category: string }>,
+  clothingImages?: Array<{ base64: string; mimeType: string }>,
+  personImage?: { base64: string; mimeType: string }
+): Promise<GeneratedImageResult> {
+  const parts: Part[] = [];
+
+  if (personImage) {
+    parts.push({
+      inlineData: {
+        data: personImage.base64,
+        mimeType: personImage.mimeType,
+      },
+    });
+  }
+
+  if (clothingImages && clothingImages.length > 0) {
+    for (const img of clothingImages.slice(0, 4)) {
+      parts.push({
+        inlineData: {
+          data: img.base64,
+          mimeType: img.mimeType,
+        },
+      });
+    }
+  }
+
+  const outfitDescription = outfitItems
+    .map((item) => `${item.name} (${item.color} ${item.category})`)
+    .join(", ");
+
+  const prompt = personImage
+    ? `Generate a photorealistic image showing this person wearing the following outfit: ${outfitDescription}. Keep the person's appearance exactly the same. Show them wearing all the clothing items in a natural, flattering pose with good lighting.`
+    : `Create a stylish fashion flat lay image showcasing these clothing items arranged together as a complete outfit: ${outfitDescription}. Arrange them aesthetically on a clean, light background as if displayed in a fashion magazine.`;
+
+  parts.push({ text: prompt });
+
+  const response = await genAI.models
+    .generateContent({
+      model: IMAGE_GEN_MODEL,
+      contents: parts,
+      config: {
+        responseModalities: [Modality.IMAGE, Modality.TEXT],
+      },
+    })
+    .catch(handleGeminiError);
+
+  const candidates = response.candidates;
+  if (!candidates || candidates.length === 0) {
+    throw new Error("No image generated");
+  }
+
+  const responseParts = candidates[0].content?.parts;
+  if (!responseParts) {
+    throw new Error("No image found in response");
+  }
+
+  for (const part of responseParts) {
+    if (part.inlineData?.data) {
+      return {
+        imageData: part.inlineData.data,
+        mimeType: part.inlineData.mimeType || "image/png",
+      };
+    }
+  }
+
+  throw new Error("No image found in response");
 }

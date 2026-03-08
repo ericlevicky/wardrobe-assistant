@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { virtualTryOn, GeminiRateLimitError, GeminiModelNotFoundError } from "@/lib/gemini";
+import {
+  virtualTryOn,
+  generateOutfitImage,
+  GeminiRateLimitError,
+  GeminiModelNotFoundError,
+} from "@/lib/gemini";
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -28,14 +33,27 @@ export async function POST(request: NextRequest) {
     const personBuffer = Buffer.from(await personImage.arrayBuffer());
     const personBase64 = personBuffer.toString("base64");
 
-    const result = await virtualTryOn(
-      personBase64,
-      personImage.type,
-      outfitItems,
-      clothingImageUrls
-    );
+    // Generate text description and outfit image in parallel
+    const [result, generatedImage] = await Promise.allSettled([
+      virtualTryOn(personBase64, personImage.type, outfitItems, clothingImageUrls),
+      generateOutfitImage(
+        outfitItems,
+        undefined,
+        { base64: personBase64, mimeType: personImage.type }
+      ),
+    ]);
 
-    return NextResponse.json({ result });
+    return NextResponse.json({
+      result: result.status === "fulfilled" ? result.value : null,
+      imageData:
+        generatedImage.status === "fulfilled"
+          ? generatedImage.value.imageData
+          : null,
+      imageMimeType:
+        generatedImage.status === "fulfilled"
+          ? generatedImage.value.mimeType
+          : null,
+    });
   } catch (error) {
     console.error("Virtual try-on error:", error);
     if (error instanceof GeminiRateLimitError) {

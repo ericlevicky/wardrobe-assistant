@@ -16,6 +16,8 @@ export default function TryOnPage() {
   const [personImage, setPersonImage] = useState<File | null>(null);
   const [personPreview, setPersonPreview] = useState<string>("");
   const [result, setResult] = useState<string>("");
+  const [resultImage, setResultImage] = useState<string>("");
+  const [resultImageMime, setResultImageMime] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [loadingWardrobe, setLoadingWardrobe] = useState(true);
   const [error, setError] = useState("");
@@ -52,6 +54,8 @@ export default function TryOnPage() {
     setPersonImage(file);
     setPersonPreview(URL.createObjectURL(file));
     setResult("");
+    setResultImage("");
+    setResultImageMime("");
   };
 
   const toggleItem = (item: ClothingItem) => {
@@ -61,6 +65,8 @@ export default function TryOnPage() {
         : [...prev, item]
     );
     setResult("");
+    setResultImage("");
+    setResultImageMime("");
   };
 
   const handleTryOn = async () => {
@@ -99,7 +105,11 @@ export default function TryOnPage() {
       }
 
       const data = await res.json();
-      setResult(data.result);
+      setResult(data.result || "");
+      if (data.imageData) {
+        setResultImage(data.imageData);
+        setResultImageMime(data.imageMimeType || "image/png");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Virtual try-on failed");
     } finally {
@@ -220,7 +230,7 @@ export default function TryOnPage() {
               {loading ? (
                 <>
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  Analyzing your outfit...
+                  Generating your try-on...
                 </>
               ) : (
                 <>🪄 Try On This Outfit</>
@@ -236,7 +246,7 @@ export default function TryOnPage() {
 
           {/* Right Column: Wardrobe Picker or Result */}
           <div className="space-y-6">
-            {result ? (
+            {result || resultImage ? (
               /* AI Result */
               <div className="card">
                 <div className="flex items-center gap-2 mb-4">
@@ -245,15 +255,41 @@ export default function TryOnPage() {
                     How This Outfit Looks on You
                   </h2>
                 </div>
-                <div className="prose prose-sm max-w-none">
-                  {result.split("\n").map((line, i) => (
-                    <p key={i} className={`text-gray-700 ${line === "" ? "mt-3" : ""}`}>
-                      {line}
+
+                {/* Generated Try-On Image */}
+                {resultImage && (
+                  <div className="mb-4">
+                    <div className="relative w-full rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`data:${resultImageMime};base64,${resultImage}`}
+                        alt="AI-generated try-on"
+                        className="w-full object-contain max-h-[500px]"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1 text-center">
+                      AI-generated image — results may vary
                     </p>
-                  ))}
-                </div>
+                  </div>
+                )}
+
+                {/* Text Description */}
+                {result && (
+                  <div className="prose prose-sm max-w-none">
+                    {result.split("\n").map((line, i) => (
+                      <p key={i} className={`text-gray-700 ${line === "" ? "mt-3" : ""}`}>
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                )}
+
                 <button
-                  onClick={() => setResult("")}
+                  onClick={() => {
+                    setResult("");
+                    setResultImage("");
+                    setResultImageMime("");
+                  }}
                   className="mt-4 btn-secondary text-sm"
                 >
                   Try a different outfit
