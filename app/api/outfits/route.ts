@@ -6,7 +6,7 @@ import { getOutfitSuggestions, GeminiRateLimitError, GeminiModelNotFoundError } 
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.accessToken) {
+  if (!session?.accessToken || !session.userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   try {
     const { occasion, weather } = await request.json();
 
-    const wardrobeItems = await getWardrobeItems(spreadsheetId);
+    const wardrobeItems = await getWardrobeItems(spreadsheetId, session.userId);
 
     if (wardrobeItems.length === 0) {
       return NextResponse.json(

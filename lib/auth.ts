@@ -52,6 +52,8 @@ export const authOptions: AuthOptions = {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
         token.expiresAt = account.expires_at;
+        // token.sub is the Google user ID (stable, unique per Google account)
+        token.userId = token.sub;
         return token;
       }
 
@@ -81,6 +83,7 @@ export const authOptions: AuthOptions = {
     },
     async session({ session, token }) {
       session.accessToken = token.accessToken as string;
+      session.userId = token.userId as string;
       return session;
     },
   },
