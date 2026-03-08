@@ -81,6 +81,31 @@ function userSheetTitle(userId: string): string {
   return `User_${sanitized}`.slice(0, 100);
 }
 
+/**
+ * Converts a legacy Google Drive export URL to the direct lh3.googleusercontent.com
+ * format which renders correctly in browsers.
+ * e.g. https://drive.google.com/uc?export=view&id=FILE_ID
+ *   -> https://lh3.googleusercontent.com/d/FILE_ID
+ */
+function normalizeImageUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (
+      parsed.hostname === "drive.google.com" &&
+      parsed.pathname === "/uc" &&
+      parsed.searchParams.get("export") === "view"
+    ) {
+      const fileId = parsed.searchParams.get("id");
+      if (fileId) {
+        return `https://lh3.googleusercontent.com/d/${fileId}`;
+      }
+    }
+  } catch {
+    // Not a valid URL; return as-is
+  }
+  return url;
+}
+
 export async function getWardrobeItems(
   spreadsheetId: string,
   userId: string
@@ -100,7 +125,7 @@ export async function getWardrobeItems(
     name: row[1] ?? "",
     category: row[2] ?? "",
     color: row[3] ?? "",
-    imageUrl: row[4] ?? "",
+    imageUrl: normalizeImageUrl(row[4] ?? ""),
     driveFileId: row[5] ?? "",
     tags: row[6] ?? "",
     addedAt: row[7] ?? "",
