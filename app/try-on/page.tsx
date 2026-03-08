@@ -6,6 +6,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import Navigation from "@/components/Navigation";
 import ClothingCard from "@/components/ClothingCard";
+import CoffeeSupportNotice from "@/components/CoffeeSupportNotice";
 import { ClothingItem } from "@/lib/google-sheets";
 
 export default function TryOnPage() {
@@ -18,6 +19,7 @@ export default function TryOnPage() {
   const [result, setResult] = useState<string>("");
   const [resultImage, setResultImage] = useState<string>("");
   const [resultImageMime, setResultImageMime] = useState<string>("");
+  const [imageGenerationFailed, setImageGenerationFailed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingWardrobe, setLoadingWardrobe] = useState(true);
   const [error, setError] = useState("");
@@ -56,6 +58,7 @@ export default function TryOnPage() {
     setResult("");
     setResultImage("");
     setResultImageMime("");
+    setImageGenerationFailed(false);
   };
 
   const toggleItem = (item: ClothingItem) => {
@@ -67,6 +70,7 @@ export default function TryOnPage() {
     setResult("");
     setResultImage("");
     setResultImageMime("");
+    setImageGenerationFailed(false);
   };
 
   const handleTryOn = async () => {
@@ -82,6 +86,7 @@ export default function TryOnPage() {
     setLoading(true);
     setError("");
     setResult("");
+    setImageGenerationFailed(false);
 
     try {
       const formData = new FormData();
@@ -109,6 +114,9 @@ export default function TryOnPage() {
       if (data.imageData) {
         setResultImage(data.imageData);
         setResultImageMime(data.imageMimeType || "image/png");
+      }
+      if (data.imageGenerationFailed) {
+        setImageGenerationFailed(true);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Virtual try-on failed");
@@ -246,7 +254,7 @@ export default function TryOnPage() {
 
           {/* Right Column: Wardrobe Picker or Result */}
           <div className="space-y-6">
-            {result || resultImage ? (
+            {result || resultImage || imageGenerationFailed ? (
               /* AI Result */
               <div className="card">
                 <div className="flex items-center gap-2 mb-4">
@@ -273,6 +281,11 @@ export default function TryOnPage() {
                   </div>
                 )}
 
+                {/* Image generation unavailable notice */}
+                {imageGenerationFailed && (
+                  <CoffeeSupportNotice className="mb-4" />
+                )}
+
                 {/* Text Description */}
                 {result && (
                   <div className="prose prose-sm max-w-none">
@@ -289,6 +302,7 @@ export default function TryOnPage() {
                     setResult("");
                     setResultImage("");
                     setResultImageMime("");
+                    setImageGenerationFailed(false);
                   }}
                   className="mt-4 btn-secondary text-sm"
                 >
