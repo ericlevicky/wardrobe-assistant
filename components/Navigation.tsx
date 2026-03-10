@@ -4,6 +4,7 @@ import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
+import { useTheme } from "@/context/ThemeContext";
 
 const navLinks = [
   { href: "/wardrobe", label: "My Wardrobe", icon: "👗" },
@@ -14,6 +15,7 @@ const navLinks = [
 export default function Navigation() {
   const { data: session } = useSession();
   const pathname = usePathname();
+  const { theme, toggleTheme } = useTheme();
 
   if (!session) return null;
 
@@ -47,6 +49,16 @@ export default function Navigation() {
 
           {/* User Menu */}
           <div className="flex items-center gap-3">
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              title={`Switch to ${theme === "feminine" ? "masculine" : "feminine"} theme`}
+              aria-label={`Switch to ${theme === "feminine" ? "masculine" : "feminine"} theme`}
+              className="text-sm text-gray-500 hover:text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              {theme === "masculine" ? "🌸" : "⚔️"}
+            </button>
+
             {session.user?.image && (
               <Image
                 src={session.user.image}
