@@ -1,19 +1,32 @@
 import { google } from "googleapis";
 import { Readable } from "stream";
 
-function getDriveClient(accessToken: string) {
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: accessToken });
+function getDriveClient() {
+  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
+
+  if (!clientEmail || !privateKey) {
+    throw new Error(
+      "Missing required environment variables: GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY must be set"
+    );
+  }
+
+  const auth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: clientEmail,
+      private_key: privateKey.replace(/\\n/g, "\n"),
+    },
+    scopes: ["https://www.googleapis.com/auth/drive.file"],
+  });
   return google.drive({ version: "v3", auth });
 }
 
 export async function uploadImageToDrive(
-  accessToken: string,
   imageBuffer: Buffer,
   fileName: string,
   mimeType: string
 ): Promise<{ fileId: string; webViewLink: string }> {
-  const drive = getDriveClient(accessToken);
+  const drive = getDriveClient();
 
   const stream = new Readable();
   stream.push(imageBuffer);
@@ -58,9 +71,8 @@ export async function uploadImageToDrive(
 }
 
 export async function deleteImageFromDrive(
-  accessToken: string,
   fileId: string
 ): Promise<void> {
-  const drive = getDriveClient(accessToken);
+  const drive = getDriveClient();
   await drive.files.delete({ fileId });
 }

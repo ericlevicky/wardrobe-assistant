@@ -6,7 +6,7 @@ import { analyzeClothingImage, GeminiRateLimitError, GeminiModelNotFoundError } 
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.accessToken) {
+  if (!session?.userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -24,7 +24,6 @@ export async function POST(request: NextRequest) {
 
     // Upload to Google Drive
     const { fileId, webViewLink } = await uploadImageToDrive(
-      session.accessToken,
       buffer,
       `wardrobe-${Date.now()}-${file.name}`,
       mimeType
